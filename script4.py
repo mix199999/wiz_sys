@@ -2,78 +2,108 @@ import cv2
 import numpy as np
 import os
 
-# Parametry konfiguracyjne
-FLOW_THRESHOLD = 2.0  # Próg dla wartości przepływu optycznego
+# Konfiguracja parametrów
+MIN_CONTOUR_AREA = 3000   # Minimalna powierzchnia konturu 
+KERNEL_SIZE = (5, 5)      # Rozmiar kernela morfologicznego
+HISTORY = 500            # Liczba klatek do zapamiętania przez odejmowanie tła
+VAR_THRESHOLD = 25        # Czułość na zmiany w tle 
+MOG_SHADOWS = False       # Włącz/wyłącz detekcję cieni w MOG2
+TRACKED_LIFETIME = 3      # Czas życia obiektów w sekundach 
+# Pozycja linii liczenia
+MIDDLE_AREA_TOP_RATIO = 0.8
+MIDDLE_AREA_LEFT_RATIO = 0.3
+MIDDLE_AREA_RIGHT_RATIO = 0.68
 
-# Tworzenie folderów na wyniki
+# Ścieżki do plików
+INPUT_VIDEO_PATH = "resources/videos/zd4.mp4"
+OUTPUT_VIDEO_PATH = "output/videos/cars_detected.mp4"
+
+# Tworzenie katalogów wyjściowych
 os.makedirs("output/videos", exist_ok=True)
 os.makedirs("output/images", exist_ok=True)
 
-# Ścieżki do plików
-input_video_path = "resources/videos/zd4.mp4"
-output_diff_video_path = "output/videos/diff_output.mp4"
-output_avg_image_path = "output/images/avg_background.png"
+# Inicjalizacja wideo
+cap = cv2.VideoCapture(INPUT_VIDEO_PATH)
+if not cap.isOpened():
+    raise IOError("Nie udało się otworzyć wideo.")
 
-# Wczytanie wideo
-cap = cv2.VideoCapture(input_video_path)
-
-# Pobranie właściwości wideo
 frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-fps = int(cap.get(cv2.CAP_PROP_FPS))
+fps = cap.get(cv2.CAP_PROP_FPS)
 frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-# Inicjalizacja zapisu wideo różnicowego
+# Obliczenie pozycji linii liczenia
+line_y = int(frame_height * MIDDLE_AREA_TOP_RATIO)
+line_left = int(frame_width * MIDDLE_AREA_LEFT_RATIO)
+line_right = int(frame_width * MIDDLE_AREA_RIGHT_RATIO)
+
+# Inicjalizacja zapisu wideo
 fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-out_diff = cv2.VideoWriter(output_diff_video_path, fourcc, fps, (frame_width, frame_height), isColor=False)
+out = cv2.VideoWriter(OUTPUT_VIDEO_PATH, fourcc, fps, (frame_width, frame_height), isColor=True)
 
-# Inicjalizacja zmiennych do uśredniania
-avg_frame = np.zeros((frame_height, frame_width, 3), dtype=np.float32)
-ret, prev_frame = cap.read()
-prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY) if ret else None
+# Inicjalizacja algorytmu odejmowania tła
+bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=HISTORY, varThreshold=VAR_THRESHOLD, detectShadows=MOG_SHADOWS)
 
+# Zmienna do liczenia pojazdów oraz lista śledzonych obiektów
+car_count = 0
+tracked_objects = {}
 frame_index = 0
 
-while ret:
-    # Dodawanie klatki do uśredniania
-    avg_frame += prev_frame.astype(np.float32)
-    
-    # Wczytanie kolejnej klatki
+# Ustalanie klatek do zapisania (początek, środek, koniec)
+save_frames = [0, frame_count // 2, frame_count - 1]
+saved_frames = 0
+
+while True:
     ret, frame = cap.read()
     if not ret:
         break
-    
-    # Konwersja na skalę szarości
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    
-    # Obliczenie przepływu optycznego Farnebäcka
-    flow = cv2.calcOpticalFlowFarneback(prev_gray, gray, None, 0.5, 3, 15, 3, 5, 1.2, 0)
-    
-    # Obliczenie wartości przepływu (moduł wektora)
-    mag, _ = cv2.cartToPolar(flow[..., 0], flow[..., 1])
-    
-    # Próg dla ruchu - ignorowanie powolnych obiektów
-    mask = mag > FLOW_THRESHOLD
-    diff_frame = np.uint8(mask * 255)  # Skalowanie do uint8
-    
-    # Zapis klatki różnicowej
-    out_diff.write(diff_frame)
-    
-    # Aktualizacja poprzedniej klatki
-    prev_gray = gray.copy()
-    prev_frame = frame.copy()
-    
     frame_index += 1
 
-# Uśrednianie tła
-avg_frame /= frame_index
-avg_frame = np.uint8(avg_frame)  # Konwersja do uint8
+    # Zastosowanie algorytmu odejmowania tła
+    fgmask = bg_subtractor.apply(frame)
+    _, fgmask = cv2.threshold(fgmask, 150, 255, cv2.THRESH_BINARY)  # Zmniejszony próg
 
-# Zapis uśrednionego tła
-cv2.imwrite(output_avg_image_path, avg_frame)
+    # Operacje morfologiczne
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, KERNEL_SIZE)
+    fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_OPEN, kernel, iterations=2)
+    fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_DILATE, kernel, iterations=2)
+
+    # Znalezienie konturów
+    contours, _ = cv2.findContours(fgmask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    for cnt in contours:
+        if cv2.contourArea(cnt) > MIN_CONTOUR_AREA:
+            x, y, w, h = cv2.boundingRect(cnt)
+            cx, cy = x + w // 2, y + h // 2
+            
+            # Rysowanie prostokąta i środka obiektu
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            cv2.circle(frame, (cx, cy), 4, (0, 0, 255), -1)
+
+            # Detekcja przecięcia linii liczenia
+            if (y < line_y <= y + h) and (line_left <= cx <= line_right):
+                if not any(abs(cx - obj[0]) < 40 and abs(cy - obj[1]) < 40 for obj in tracked_objects):
+                    tracked_objects[(cx, cy)] = frame_index  # Rejestracja pojazdu
+                    car_count += 1
+
+    # Usuwanie starych wpisów z listy śledzonych obiektów
+    tracked_objects = {k: v for k, v in tracked_objects.items() if frame_index - v < fps * TRACKED_LIFETIME}
+
+    # Rysowanie linii liczenia
+    cv2.line(frame, (line_left, line_y), (line_right, line_y), (255, 0, 0), 2)
+    cv2.putText(frame, f"Count: {car_count}", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
+
+    # Zapisywanie klatek w ustalonych momentach
+    if frame_index in save_frames and saved_frames < 3:
+        cv2.imwrite(f"output/images/frame_{saved_frames+1}.png", frame)
+        cv2.imwrite(f"output/images/mask_{saved_frames+1}.png", fgmask)
+        saved_frames += 1
+
+    # Zapis przetworzonej klatki do wideo
+    out.write(frame)
 
 # Zwolnienie zasobów
 cap.release()
-out_diff.release()
+out.release()
 
-print("Zakończono przetwarzanie. Wygenerowano klatki różnicowe oraz obraz uśredniony.")
+print(f"Przetwarzanie zakończone. Wykryto łącznie {car_count} pojazdów.")
