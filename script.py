@@ -18,7 +18,7 @@ face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_fronta
 gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
 # Wykrywanie twarzy
-faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(25, 25))
 
 
 for (x, y, w, h) in faces:
@@ -38,7 +38,7 @@ rotated_image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
 
 rotated_gray = cv2.cvtColor(rotated_image, cv2.COLOR_BGR2GRAY)
 
-faces_rotated = face_cascade.detectMultiScale(rotated_gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+faces_rotated = face_cascade.detectMultiScale(rotated_gray, scaleFactor=1.1, minNeighbors=5, minSize=(25, 25))
 
 rotated_image_rgb = cv2.cvtColor(rotated_image, cv2.COLOR_BGR2RGB)
 for (x, y, w, h) in faces_rotated:

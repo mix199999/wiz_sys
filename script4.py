@@ -6,9 +6,9 @@ import os
 MIN_CONTOUR_AREA = 3000   # Minimalna powierzchnia konturu 
 KERNEL_SIZE = (5, 5)      # Rozmiar kernela morfologicznego
 HISTORY = 500            # Liczba klatek do zapamiętania przez odejmowanie tła
-VAR_THRESHOLD = 25        # Czułość na zmiany w tle 
+VAR_THRESHOLD = 30       # Czułość na zmiany w tle 
 MOG_SHADOWS = False       # Włącz/wyłącz detekcję cieni w MOG2
-TRACKED_LIFETIME = 3      # Czas życia obiektów w sekundach 
+TRACKED_LIFETIME = 1.5     # Czas życia obiektów w sekundach 
 # Pozycja linii liczenia
 MIDDLE_AREA_TOP_RATIO = 0.8
 MIDDLE_AREA_LEFT_RATIO = 0.3

@@ -3,10 +3,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # PARAMETRY DO EDYCJI
-MIN_NEIGHBORS = 9  # Im wyższa wartość, tym mniej fałszywych twarzy (zalecane 8-10)
-SCALE_FACTOR = 1.25  # Jak szybko zmniejszamy obraz przy skanowaniu (zalecane 1.2-1.3)
+MIN_NEIGHBORS = 4  # Im wyższa wartość, tym mniej fałszywych twarzy (zalecane 8-10)
+SCALE_FACTOR = 1.5  # Jak szybko zmniejszamy obraz przy skanowaniu (zalecane 1.2-1.3)
 CLUSTER_THRESHOLD = 30  # Jak blisko siebie wykryte twarze są łączone (zalecane 20-30)
-MIN_FACE_SIZE = (50, 50)  # Minimalny rozmiar wykrywanej twarzy
+MIN_FACE_SIZE = (100, 100)  # Minimalny rozmiar wykrywanej twarzy
 
 # Wczytaj obraz
 image_path = "resources/images/zd2.jpg"
